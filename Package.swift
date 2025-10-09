@@ -5,6 +5,9 @@ import PackageDescription
 
 let package = Package(
     name: "FoundationCompatKit",
+    platforms: [
+        .iOS("7.0")
+    ],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         .library(
@@ -20,7 +23,13 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .target(
             name: "FoundationCompatKit",
-            dependencies: []),
+            dependencies: ["SocketRocket"],
+            path: "Sources/FoundationCompatKit"),
+        .target(
+            name: "SocketRocket",
+            path: "Sources/SocketRocket",
+            publicHeadersPath: "."
+        ),
         .testTarget(
             name: "FoundationCompatKitTests",
             dependencies: ["FoundationCompatKit"]),
