@@ -11,8 +11,24 @@ public class URLSessionWebSocketTask: NSObject {
         case normalClosure = 1000
         case goingAway = 1001
         case protocolError = 1002
+        case unsupportedData = 1003
+        case noStatusReceived = 1005
+        case abnormalClosure = 1006
+        case invalidFramePayloadData = 1007
+        case policyViolation = 1008
+        case messageTooBig = 1009
+        case mandatoryExtension = 1010
+        case internalServerError = 1011
+        case tlsHandshake = 1015
         case unknown = -1
     }
+
+    public enum State: Int {
+        case running, suspended, canceling, completed
+    }
+
+    public private(set) var state: State = .suspended
+    public var maximumMessageSize: Int64 = Int64.max
 
     private var socket: SRWebSocket?
     private let url: URL
@@ -29,11 +45,16 @@ public class URLSessionWebSocketTask: NSObject {
         socket = SRWebSocket(urlRequest: request)
         socket?.delegate = self
         socket?.open()
+        state = .running
     }
 
-    public func send(_ message: Message, completionHandler: ((Error?) -> Void)? = nil) {
+    @preconcurrency
+    public func send(
+        _ message: URLSessionWebSocketTask.Message,
+        completionHandler: @escaping (Error?) -> Void
+    ) {
         guard let socket = socket, isOpen else {
-            completionHandler?(NSError(domain: "WebSocketCompat", code: -1, userInfo: [NSLocalizedDescriptionKey: "WebSocket not open"]))
+            completionHandler(NSError(domain: "WebSocketCompat", code: -1, userInfo: [NSLocalizedDescriptionKey: "WebSocket not open"]))
             return
         }
 
@@ -44,7 +65,7 @@ public class URLSessionWebSocketTask: NSObject {
             socket.send(data)
         }
 
-        completionHandler?(nil)
+        completionHandler(nil)
     }
 
     public func receive(completionHandler: @escaping (Result<Message, Error>) -> Void) {
@@ -66,6 +87,7 @@ public class URLSessionWebSocketTask: NSObject {
 
         socket?.close(withCode: closeCode.rawValue, reason: reasonString)
         socket = nil
+        state = .completed
     }
 }
 
@@ -78,6 +100,7 @@ extension URLSessionWebSocketTask: SRWebSocketDelegate {
         pendingReceive?(.failure(error))
         pendingReceive = nil
         isOpen = false
+        state = .completed
     }
 
     public func webSocket(_ webSocket: SRWebSocket!, didReceiveMessage message: Any!) {
@@ -94,6 +117,7 @@ extension URLSessionWebSocketTask: SRWebSocketDelegate {
 
     public func webSocket(_ webSocket: SRWebSocket!, didCloseWithCode code: Int, reason: String!, wasClean: Bool) {
         isOpen = false
+        state = .completed
         let error = NSError(domain: "WebSocketCompat", code: code, userInfo: [NSLocalizedDescriptionKey: reason ?? "Closed"])
         pendingReceive?(.failure(error))
         pendingReceive = nil
