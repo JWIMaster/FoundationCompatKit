@@ -1,19 +1,21 @@
 import Foundation
 
-// Backport ISO8601DateFormatter for iOS < 10
-class ISO8601DateFormatterCompat {
-    struct Options: OptionSet {
-        let rawValue: Int
-        static let withInternetDateTime = Options(rawValue: 1 << 0)
-        static let withFractionalSeconds = Options(rawValue: 1 << 1)
+
+public class ISO8601DateFormatterCompat {
+    public struct Options: OptionSet {
+        public let rawValue: Int
+        public init(rawValue: Int) { self.rawValue = rawValue }
+        
+        public static let withInternetDateTime = Options(rawValue: 1 << 0)
+        public static let withFractionalSeconds = Options(rawValue: 1 << 1)
     }
 
-    var formatOptions: Options = [.withInternetDateTime]
+    public var formatOptions: Options = [.withInternetDateTime]
 
     private let baseFormatter: DateFormatter
     private let fractionalFormatter: DateFormatter
 
-    init() {
+    public init() {
         baseFormatter = DateFormatter()
         baseFormatter.locale = Locale(identifier: "en_US_POSIX")
         baseFormatter.timeZone = TimeZone(secondsFromGMT: 0)
@@ -25,7 +27,7 @@ class ISO8601DateFormatterCompat {
         fractionalFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX"
     }
 
-    func date(from string: String) -> Date? {
+    public func date(from string: String) -> Date? {
         if formatOptions.contains(.withFractionalSeconds),
            let date = fractionalFormatter.date(from: string) {
             return date
@@ -33,7 +35,7 @@ class ISO8601DateFormatterCompat {
         return baseFormatter.date(from: string)
     }
 
-    func string(from date: Date) -> String {
+    public func string(from date: Date) -> String {
         if formatOptions.contains(.withFractionalSeconds) {
             return fractionalFormatter.string(from: date)
         }
