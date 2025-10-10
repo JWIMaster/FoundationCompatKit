@@ -1,27 +1,45 @@
 import Foundation
 
-@available(iOS, introduced: 6.0, obsoleted: 7.0.1)
-public class URLSessionDataTaskCompat {
-    private let request: URLRequest
+public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionDataDelegate, NSURLConnectionDelegate {
     private let completionHandler: (Data?, URLResponse?, Error?) -> Void
     private var connection: NSURLConnection?
+    private var receivedData = Data()
 
-    public init(request: URLRequest, completionHandler: @escaping (Data?, URLResponse?, Error?) -> Void) {
-        self.request = request
+    public init(session: URLSessionCompat, request: URLRequest, completionHandler: @escaping (Data?, URLResponse?, Error?) -> Void) {
         self.completionHandler = completionHandler
+        super.init(session: session, request: request)
     }
 
-    public func resume() {
-        let conn = NSURLConnection(request: request, delegate: nil, startImmediately: false)
-        connection = conn
-        conn?.start()
+    public override func startTask() {
+        guard state == .running else { return }
+        connection = NSURLConnection(request: originalRequest, delegate: self, startImmediately: true)
+    }
 
-        NSURLConnection.sendAsynchronousRequest(request, queue: OperationQueue.main) { response, data, error in
-            self.completionHandler(data, response, error)
+    public override func cancel() {
+        super.cancel()
+        connection?.cancel()
+    }
+
+    public func connection(_ connection: NSURLConnection, didReceive response: URLResponse) {
+        if let delegate = session.delegate as? URLSessionDataDelegateCompat {
+            delegate.urlSession(session, dataTask: self, didReceive: response) { _ in }
         }
     }
 
-    public func cancel() {
-        connection?.cancel()
+    public func connection(_ connection: NSURLConnection, didReceive data: Data) {
+        receivedData.append(data)
+        if let delegate = session.delegate as? URLSessionDataDelegateCompat {
+            delegate.urlSession(session, dataTask: self, didReceive: data)
+        }
+    }
+
+    public func connectionDidFinishLoading(_ connection: NSURLConnection) {
+        completionHandler(receivedData, connection.currentRequest.url.flatMap { URLResponse(url: $0, mimeType: nil, expectedContentLength: receivedData.count, textEncodingName: nil) }, nil)
+        finishTask()
+    }
+
+    public func connection(_ connection: NSURLConnection, didFailWithError error: Error) {
+        completionHandler(nil, connection.currentRequest.url.flatMap { URLResponse(url: $0, mimeType: nil, expectedContentLength: 0, textEncodingName: nil) }, error)
+        finishTask(with: error)
     }
 }

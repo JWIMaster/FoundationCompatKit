@@ -1,15 +1,17 @@
 import Foundation
 
 @available(iOS, introduced: 6.0, obsoleted: 7.0.1)
-public class URLSessionCompat {
+public class URLSessionCompat: NSObject {
     public let configuration: URLSessionConfiguration
-    public static let shared = URLSession(configuration: .default)
+    public var delegate: URLSessionDelegateCompat?
+    public static let shared = URLSessionCompat(configuration: .default)
     
-    public init(configuration: URLSessionConfiguration) {
+    public init(configuration: URLSessionConfiguration, delegate: URLSessionDelegateCompat? = nil) {
         self.configuration = configuration
+        self.delegate = delegate
     }
     
-    public convenience init() {
+    public convenience override init() {
         self.init(configuration: .default)
     }
     
@@ -17,7 +19,7 @@ public class URLSessionCompat {
         with request: URLRequest,
         completionHandler: @escaping (Data?, URLResponse?, Error?) -> Void
     ) -> URLSessionDataTaskCompat {
-        return URLSessionDataTaskCompat(request: request, completionHandler: completionHandler)
+        return URLSessionDataTaskCompat(session: self, request: request, completionHandler: completionHandler)
     }
     
     public func uploadTask(
@@ -25,17 +27,17 @@ public class URLSessionCompat {
         from bodyData: Data?,
         completionHandler: @escaping (Data?, URLResponse?, Error?) -> Void
     ) -> URLSessionUploadTaskCompat {
-        return URLSessionUploadTaskCompat(request: request, bodyData: bodyData, completionHandler: completionHandler)
+        return URLSessionUploadTaskCompat(session: self, request: request, bodyData: bodyData, completionHandler: completionHandler)
     }
     
     public func downloadTask(
         with request: URLRequest,
         completionHandler: @escaping (URL?, URLResponse?, Error?) -> Void
     ) -> URLSessionDownloadTaskCompat {
-        return URLSessionDownloadTaskCompat(request: request, completionHandler: completionHandler)
+        return URLSessionDownloadTaskCompat(session: self, request: request, completionHandler: completionHandler)
     }
     
     public func webSocketTask(with request: URLRequest) -> URLSessionWebSocketTask {
-        return URLSessionWebSocketTask(url: request.url!)
+        return URLSessionWebSocketTask(session: self, url: request.url!)
     }
 }
