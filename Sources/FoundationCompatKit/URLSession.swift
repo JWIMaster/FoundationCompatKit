@@ -11,6 +11,10 @@ public class URLSessionCompat: NSObject {
         self.delegate = delegate
     }
     
+    public init(configuration: URLSessionConfiguration) {
+        self.configuration = configuration
+    }
+    
     public convenience override init() {
         self.init(configuration: .default)
     }
