@@ -2,16 +2,16 @@ import Foundation
 
 @available(iOS, introduced: 6.0, obsoleted: 7.0.1)
 public class URLSessionCompat: NSObject {
-    public let configuration: URLSessionConfiguration
+    public let configuration: URLSessionConfigurationCompat
     public var delegate: URLSessionDelegateCompat?
     public static let shared = URLSessionCompat(configuration: .default)
     
-    public init(configuration: URLSessionConfiguration, delegate: URLSessionDelegateCompat? = nil) {
+    public init(configuration: URLSessionConfigurationCompat, delegate: URLSessionDelegateCompat? = nil) {
         self.configuration = configuration
         self.delegate = delegate
     }
     
-    public init(configuration: URLSessionConfiguration) {
+    public init(configuration: URLSessionConfigurationCompat) {
         self.configuration = configuration
     }
     
