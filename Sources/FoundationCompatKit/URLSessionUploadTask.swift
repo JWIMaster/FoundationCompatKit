@@ -1,7 +1,7 @@
 import Foundation
 
 @available(iOS, introduced: 6.0, obsoleted: 7.0.1)
-public class URLSessionUploadTask {
+public class URLSessionUploadTaskCompat {
     private let request: URLRequest
     private let bodyData: Data?
     private let completionHandler: (Data?, URLResponse?, Error?) -> Void

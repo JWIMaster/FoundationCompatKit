@@ -1,7 +1,7 @@
 import Foundation
 
 @available(iOS, introduced: 6.0, obsoleted: 7.0.1)
-public class URLSessionDownloadTask {
+public class URLSessionDownloadTaskCompat {
     private let request: URLRequest
     private let completionHandler: (URL?, URLResponse?, Error?) -> Void
     private var connection: NSURLConnection?
