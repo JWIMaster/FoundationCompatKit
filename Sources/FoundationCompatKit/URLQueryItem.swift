@@ -11,7 +11,6 @@ public struct URLQueryItemCompat {
     }
 }
 
-// Backport of URLComponents for iOS 6-7
 public struct URLComponentsCompat {
     public var scheme: String?
     public var host: String?
@@ -25,6 +24,7 @@ public struct URLComponentsCompat {
         set { _queryItems = newValue }
     }
     
+    // Backport of URLComponents(string:)
     public init?(string: String) {
         guard let url = NSURL(string: string) else { return nil }
         self.scheme = url.scheme
@@ -33,6 +33,15 @@ public struct URLComponentsCompat {
         self.path = url.path ?? ""
         self.fragment = url.fragment
         self._queryItems = url.queryItemsCompat()
+    }
+    
+    // **Backport of URLComponents(url:resolvingAgainstBaseURL:)**
+    public init?(url: URL, resolvingAgainstBaseURL: Bool) {
+        if resolvingAgainstBaseURL, let base = url.baseURL {
+            self.init(string: base.absoluteString + url.absoluteString)
+        } else {
+            self.init(string: url.absoluteString)
+        }
     }
     
     public var url: URL? {
@@ -73,7 +82,7 @@ public struct URLComponentsCompat {
     }
 }
 
-// NSURL extension for parsing query items
+// NSURL helper to parse query items
 private extension NSURL {
     func queryItemsCompat() -> [URLQueryItemCompat]? {
         guard let query = self.query else { return nil }
@@ -85,3 +94,4 @@ private extension NSURL {
         }
     }
 }
+
