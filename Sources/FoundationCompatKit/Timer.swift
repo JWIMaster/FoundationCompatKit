@@ -1,34 +1,46 @@
+
+//
+//  Timer.swift
+//  Learning UIKit
+//
+//  Created by JWI on 28/08/2025.
+//  Copyright (c) 2025 JWI. All rights reserved.
+//
+
 import Foundation
 import UIKit
 
-#if !os(macOS) && !targetEnvironment(macCatalyst)
-@available(iOS, introduced: 6.0, obsoleted: 10.0)
-public extension Foundation.Timer {
 
-    /// Helper class for closure-based timer
-    class ClosureTimer: NSObject {
-        let block: (Foundation.Timer) -> Void
-
-        init(block: @escaping (Foundation.Timer) -> Void) {
-            self.block = block
-        }
-
-        @objc func fire(_ timer: Foundation.Timer) {
-            block(timer)
-        }
+//iOS 10 Timer
+class ClosureTimer: NSObject {
+    let block: (Foundation.Timer) -> Void
+    
+    init(block: @escaping (Timer) -> Void) {
+        self.block = block
     }
-
-    /// iOS 10-style closure-based scheduledTimer backport
-    @available(iOS, introduced: 6.0, obsoleted: 10.0)
-    static func scheduledTimer(withTimeInterval interval: TimeInterval, repeats: Bool, block: @escaping (Foundation.Timer) -> Void) -> Foundation.Timer {
-        let closureTimer = ClosureTimer(block: block)
-        return Foundation.Timer.scheduledTimer(
-            timeInterval: interval,
-            target: closureTimer,
-            selector: #selector(ClosureTimer.fire(_:)),
-            userInfo: nil,
-            repeats: repeats
-        )
+    
+    @objc func fire(_ timer: Timer) {
+        block(timer)
     }
 }
-#endif
+
+extension Timer {
+    
+    ///iOS 10 Style Closure Based Timer
+    @available(iOS, introduced: 6.0, obsoleted: 10.0)
+    @nonobjc public class func scheduledTimer(withTimeInterval interval: TimeInterval, repeats: Bool, block: @escaping (Foundation.Timer) -> Void) -> Foundation.Timer {
+        let closureTimer = ClosureTimer(block: block)
+        return Timer.scheduledTimer(timeInterval: interval,
+                                                      target: closureTimer,
+                                                      selector: #selector(ClosureTimer.fire(_:)),
+                                                      userInfo: nil,
+                                                      repeats: repeats)
+    }
+}
+
+
+
+
+
+
+
