@@ -16,15 +16,25 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
         // Make a mutable copy of the original request
         let mutableRequest = (originalRequest as NSURLRequest).mutableCopy() as! NSMutableURLRequest
 
-        // Ensure httpBody and httpMethod are set
+        // Set the HTTP method explicitly
+        mutableRequest.httpMethod = originalRequest.httpMethod!
+
+        // Set the body explicitly for POST/PUT
         if let body = originalRequest.httpBody {
             mutableRequest.httpBody = body
         }
-        mutableRequest.httpMethod = originalRequest.httpMethod!
 
-        // Start the NSURLConnection
+        // Copy headers
+        if let headers = originalRequest.allHTTPHeaderFields {
+            for (key, value) in headers {
+                mutableRequest.setValue(value, forHTTPHeaderField: key)
+            }
+        }
+
+        // Use NSURLConnection to start the request
         connection = NSURLConnection(request: mutableRequest as URLRequest, delegate: self, startImmediately: true)
     }
+
 
 
     public override func cancel() {
