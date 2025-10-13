@@ -12,8 +12,20 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
 
     public override func startTask() {
         guard state == .running else { return }
-        connection = NSURLConnection(request: originalRequest, delegate: self, startImmediately: true)
+
+        // Make a mutable copy of the original request
+        let mutableRequest = (originalRequest as NSURLRequest).mutableCopy() as! NSMutableURLRequest
+
+        // Ensure httpBody and httpMethod are set
+        if let body = originalRequest.httpBody {
+            mutableRequest.httpBody = body
+        }
+        mutableRequest.httpMethod = originalRequest.httpMethod!
+
+        // Start the NSURLConnection
+        connection = NSURLConnection(request: mutableRequest as URLRequest, delegate: self, startImmediately: true)
     }
+
 
     public override func cancel() {
         super.cancel()
