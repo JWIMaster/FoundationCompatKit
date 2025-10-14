@@ -4,7 +4,6 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
     private let completionHandler: (Data?, URLResponse?, Error?) -> Void
     private var connection: NSURLConnection?
     private var receivedData = Data()
-    private var urlResponse: URLResponse?  // store response here
 
     public init(session: URLSessionCompat, request: URLRequest, completionHandler: @escaping (Data?, URLResponse?, Error?) -> Void) {
         self.completionHandler = completionHandler
@@ -14,40 +13,36 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
     public override func startTask() {
         guard state == .running else { return }
 
+        // Make a mutable copy of the original request
         let mutableRequest = (originalRequest as NSURLRequest).mutableCopy() as! NSMutableURLRequest
+
+        // Set the HTTP method explicitly
         mutableRequest.httpMethod = originalRequest.httpMethod!
+
+        // Set the body explicitly for POST/PUT
         if let body = originalRequest.httpBody {
             mutableRequest.httpBody = body
         }
+
+        // Copy headers
         if let headers = originalRequest.allHTTPHeaderFields {
             for (key, value) in headers {
                 mutableRequest.setValue(value, forHTTPHeaderField: key)
             }
         }
 
+        // Use NSURLConnection to start the request
         connection = NSURLConnection(request: mutableRequest as URLRequest, delegate: self, startImmediately: true)
     }
+
+
 
     public override func cancel() {
         super.cancel()
         connection?.cancel()
     }
 
-    // MARK: - NSURLConnectionDelegate
-
-    public func connection(_ connection: NSURLConnection, willSendRequestFor challenge: URLAuthenticationChallenge) {
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let trust = challenge.protectionSpace.serverTrust {
-            let credential = URLCredential(trust: trust)
-            challenge.sender?.use(credential, for: challenge)
-            challenge.sender?.continueWithoutCredential(for: challenge)
-        } else {
-            challenge.sender?.performDefaultHandling?(for: challenge)
-        }
-    }
-
     public func connection(_ connection: NSURLConnection, didReceive response: URLResponse) {
-        self.urlResponse = response // save response
         if let delegate = session.delegate as? URLSessionDataDelegateCompat {
             delegate.urlSession(session, dataTask: self, didReceive: response) { _ in }
         }
@@ -61,12 +56,12 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
     }
 
     public func connectionDidFinishLoading(_ connection: NSURLConnection) {
-        completionHandler(receivedData, urlResponse, nil)
+        completionHandler(receivedData, connection.currentRequest.url.flatMap { URLResponse(url: $0, mimeType: nil, expectedContentLength: receivedData.count, textEncodingName: nil) }, nil)
         finishTask()
     }
 
     public func connection(_ connection: NSURLConnection, didFailWithError error: Error) {
-        completionHandler(nil, urlResponse, error)
+        completionHandler(nil, connection.currentRequest.url.flatMap { URLResponse(url: $0, mimeType: nil, expectedContentLength: 0, textEncodingName: nil) }, error)
         finishTask(with: error)
     }
 }
