@@ -4,21 +4,26 @@ import Foundation
 public class URLSessionCompat: NSObject {
     public let configuration: URLSessionConfigurationCompat
     public var delegate: URLSessionDelegateCompat?
-    public static let shared = URLSessionCompat(configuration: .default)
+    public let delegateQueue: OperationQueue
+    public static let shared = URLSessionCompat(configuration: .default, delegateQueue: OperationQueue())
     
-    public init(configuration: URLSessionConfigurationCompat, delegate: URLSessionDelegateCompat? = nil) {
+    // MARK: - Designated initializer
+    public init(configuration: URLSessionConfigurationCompat, delegate: URLSessionDelegateCompat? = nil, delegateQueue: OperationQueue = .main) {
         self.configuration = configuration
         self.delegate = delegate
+        self.delegateQueue = delegateQueue
     }
     
-    public init(configuration: URLSessionConfigurationCompat) {
-        self.configuration = configuration
+    // Convenience initializers
+    public convenience init(configuration: URLSessionConfigurationCompat) {
+        self.init(configuration: configuration, delegate: nil, delegateQueue: .main)
     }
     
     public convenience override init() {
-        self.init(configuration: .default)
+        self.init(configuration: .default, delegateQueue: .main)
     }
     
+    // MARK: - Tasks
     public func dataTask(
         with request: URLRequest,
         completionHandler: @escaping (Data?, URLResponse?, Error?) -> Void
