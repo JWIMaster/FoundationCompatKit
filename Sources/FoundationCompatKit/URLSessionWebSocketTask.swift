@@ -5,7 +5,7 @@ public class URLSessionWebSocketTask: NSObject {
     public let session: URLSessionCompat
     public let url: URL
     private var socket: SRWebSocket?
-    private var isOpen = false
+    public var isOpen = false
     private var pendingReceive: ((Result<Message, Error>) -> Void)?
     private var pongHandler: (() -> Void)?
 
