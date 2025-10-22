@@ -45,7 +45,7 @@ public extension DispatchQueue {
     }
 }
 
-@available(iOS, introduced: 6.0, deprecated: 8.0)
+@available(iOS, introduced: 6.0, obsoleted: 8.0)
 public struct DispatchWorkItem {
     let block: () -> Void
 
@@ -79,7 +79,7 @@ public extension DispatchQueue {
 }
 
 extension DispatchWorkItem {
-    @available(iOS, introduced: 6.0, deprecated: 8.0)
+    @available(iOS, introduced: 6.0, obsoleted: 8.0)
     func notify(qos: LegacyQoS.QoS = .default, queue: DispatchQueue = .main, block: @escaping () -> Void) {
         queue.asyncAfter(deadline: .now()) {
             block()
