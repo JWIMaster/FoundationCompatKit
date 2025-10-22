@@ -38,6 +38,7 @@ public struct LegacyQoS {
 }
 
 public extension DispatchQueue {
+    ///Modern style QoS wrapper for the old Swift overlay
     class func global(qos: LegacyQoS.QoS) -> DispatchQueue {
         return DispatchQueue.global(priority: LegacyQoS(qos).legacyPriority)
     }
