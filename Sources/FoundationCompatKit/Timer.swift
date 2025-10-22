@@ -28,7 +28,7 @@ extension Timer {
     
     ///iOS 10 Style Closure Based Timer
     @available(iOS, introduced: 6.0, obsoleted: 10.0)
-    @nonobjc public class func scheduledTimer(withTimeInterval interval: TimeInterval, repeats: Bool, block: @escaping (Foundation.Timer) -> Void) -> Foundation.Timer {
+    public class func scheduledTimer(withTimeInterval interval: TimeInterval, repeats: Bool, block: @escaping (Foundation.Timer) -> Void) -> Foundation.Timer {
         let closureTimer = ClosureTimer(block: block)
         return Timer.scheduledTimer(timeInterval: interval,
                                                       target: closureTimer,
