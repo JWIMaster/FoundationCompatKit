@@ -39,7 +39,7 @@ public struct LegacyQoS {
 
 public extension DispatchQueue {
     ///Modern style QoS wrapper for the old Swift overlay
-    @available(iOS, introduced: 6.0, deprecated: 8.0)
+    @available(iOS, introduced: 6.0, obsoleted: 8.0)
     class func global(qos: LegacyQoS.QoS) -> DispatchQueue {
         return DispatchQueue.global(priority: LegacyQoS(qos).legacyPriority)
     }
@@ -77,6 +77,25 @@ public extension DispatchQueue {
         }
     }
 }
+
+
+public extension DispatchQueue {
+    
+    /*@available(iOS, introduced: 6.0, deprecated: 8.0)
+    convenience init(
+        label: String,
+        qos: LegacyQoS.QoS = .default,
+        attributes: DispatchQueue.Attributes = [],
+        autoreleaseFrequency: DispatchQueue.AutoreleaseFrequency = .inherit,
+        target: DispatchQueue? = nil
+    ) {
+        DispatchObject.setTarget(queue: )
+        let targetQueue = target ?? DispatchQueue.global(qos: qos)
+        
+        self.init(label: label, target: targetQueue)
+    }*/
+}
+
 
 extension DispatchWorkItem {
     @available(iOS, introduced: 6.0, obsoleted: 8.0)
