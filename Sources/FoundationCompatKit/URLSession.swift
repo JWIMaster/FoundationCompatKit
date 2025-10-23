@@ -1,6 +1,6 @@
 import Foundation
 
-@available(iOS, introduced: 6.0, obsoleted: 7.0.1)
+@available(iOS, introduced: 6.0, deprecated: 7.0.1)
 public class URLSessionCompat: NSObject {
     public let configuration: URLSessionConfigurationCompat
     public var delegate: URLSessionDelegateCompat?
