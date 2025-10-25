@@ -13,31 +13,27 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
     public override func startTask() {
         guard state == .running else { return }
 
-        // Make a mutable copy of the request
+        // Make a mutable copy of the original request
         let mutableRequest = (originalRequest as NSURLRequest).mutableCopy() as! NSMutableURLRequest
+        
+        // Set the HTTP method explicitly
         mutableRequest.httpMethod = originalRequest.httpMethod!
-        mutableRequest.httpBody = originalRequest.httpBody
+
+        // Set the body explicitly for POST/PUT
+        if let body = originalRequest.httpBody {
+            mutableRequest.httpBody = body
+        }
+
+        // Copy headers
         if let headers = originalRequest.allHTTPHeaderFields {
             for (key, value) in headers {
                 mutableRequest.setValue(value, forHTTPHeaderField: key)
             }
         }
 
-        // Run the connection on a background queue
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            // NSURLConnection schedules on the current run loop
-            let runLoop = RunLoop.current
-            self.connection = NSURLConnection(request: mutableRequest as URLRequest, delegate: self, startImmediately: false)
-            self.connection?.schedule(in: runLoop, forMode: .default)
-            self.connection?.start()
-
-            // Keep the run loop alive so NSURLConnection callbacks are delivered
-            while self.state == .running && runLoop.run(mode: .default, before: Date.distantFuture) {}
-        }
+        // Use NSURLConnection to start the request
+        connection = NSURLConnection(request: mutableRequest as URLRequest, delegate: self, startImmediately: true)
     }
-
 
 
 
