@@ -46,30 +46,17 @@ public extension DispatchQueue {
 }
 
 @available(iOS, introduced: 6.0, obsoleted: 8.0)
-public class DispatchWorkItem {
-    private let block: () -> Void
-    private var isCancelled = false
-    private let lock = NSLock() // thread-safe access
+public struct DispatchWorkItem {
+    let block: () -> Void
 
     public init(_ block: @escaping () -> Void) {
         self.block = block
     }
 
     public func perform() {
-        lock.lock()
-        let cancelled = isCancelled
-        lock.unlock()
-        guard !cancelled else { return }
         block()
     }
-
-    public func cancel() {
-        lock.lock()
-        isCancelled = true
-        lock.unlock()
-    }
 }
-
 
 
 
