@@ -1,6 +1,6 @@
 import Foundation
 
-extension Calendar {
+public extension Calendar {
     
     /// Shim for `isDateInToday(_:)` that works on iOS 6+
     @available(iOS, introduced: 6.0, obsoleted: 8.0)
