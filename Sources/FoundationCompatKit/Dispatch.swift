@@ -46,19 +46,31 @@ public extension DispatchQueue {
 }
 
 @available(iOS, introduced: 6.0, obsoleted: 8.0)
-public struct DispatchWorkItem {
-    let block: () -> Void
+public class DispatchWorkItem {
+    private let block: () -> Void
+    private(set) public var isCancelled: Bool = false
+    private let lock = NSLock()
 
     public init(_ block: @escaping () -> Void) {
         self.block = block
     }
 
+    /// Run the work item if it hasn’t been cancelled
     public func perform() {
+        lock.lock()
+        let cancelled = isCancelled
+        lock.unlock()
+        guard !cancelled else { return }
         block()
     }
+
+    /// Cancel the work item
+    public func cancel() {
+        lock.lock()
+        isCancelled = true
+        lock.unlock()
+    }
 }
-
-
 
 public extension DispatchQueue {
     @available(iOS, introduced: 6.0, deprecated: 8.0)
@@ -78,29 +90,12 @@ public extension DispatchQueue {
     }
 }
 
-
-public extension DispatchQueue {
-    
-    /*@available(iOS, introduced: 6.0, deprecated: 8.0)
-    convenience init(
-        label: String,
-        qos: LegacyQoS.QoS = .default,
-        attributes: DispatchQueue.Attributes = [],
-        autoreleaseFrequency: DispatchQueue.AutoreleaseFrequency = .inherit,
-        target: DispatchQueue? = nil
-    ) {
-        DispatchObject.setTarget(queue: )
-        let targetQueue = target ?? DispatchQueue.global(qos: qos)
-        
-        self.init(label: label, target: targetQueue)
-    }*/
-}
-
-
-extension DispatchWorkItem {
+public extension DispatchWorkItem {
+    /// Notify simulation (runs on queue after execution)
     @available(iOS, introduced: 6.0, obsoleted: 8.0)
-    func notify(qos: LegacyQoS.QoS = .default, queue: DispatchQueue = .main, block: @escaping () -> Void) {
-        queue.asyncAfter(deadline: .now()) {
+    func notify(queue: DispatchQueue = .main, block: @escaping () -> Void) {
+        queue.async {
+            guard !self.isCancelled else { return }
             block()
         }
     }
