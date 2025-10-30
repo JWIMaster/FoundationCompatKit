@@ -1,6 +1,6 @@
 import Foundation
 
-@available(iOS, introduced: 6.0, obsoleted: 7.0.1)
+@available(iOS, introduced: 6.0, deprecated: 7.0.1)
 public class URLSessionConfigurationCompat {
     public var timeoutIntervalForRequest: TimeInterval = 60
     public var timeoutIntervalForResource: TimeInterval = 7*24*60*60
