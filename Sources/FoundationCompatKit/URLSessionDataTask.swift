@@ -62,7 +62,9 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
         finishTask()
     }
 
+    // In URLSessionDataTaskCompat.swift
     public func connection(_ connection: NSURLConnection, didFailWithError error: Error) {
+        print("DEBUG: NSURLConnection failed with error:", error) // <-- MAKE SURE THIS LINE IS HERE
         completionHandler(nil, connection.currentRequest.url.flatMap { URLResponse(url: $0, mimeType: nil, expectedContentLength: 0, textEncodingName: nil) }, error)
         finishTask(with: error)
     }
