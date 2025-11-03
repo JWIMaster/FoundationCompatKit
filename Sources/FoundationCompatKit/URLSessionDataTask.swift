@@ -1,9 +1,11 @@
 import Foundation
 
 public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionDataDelegate, NSURLConnectionDelegate {
+
     private let completionHandler: (Data?, URLResponse?, Error?) -> Void
     private var connection: NSURLConnection?
     private var receivedData = Data()
+    private var response: URLResponse?
 
     public init(session: URLSessionCompat, request: URLRequest, completionHandler: @escaping (Data?, URLResponse?, Error?) -> Void) {
         self.completionHandler = completionHandler
@@ -13,15 +15,11 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
     public override func startTask() {
         guard state == .running else { return }
 
-        // Make a mutable copy of the original request
         let mutableRequest = (originalRequest as NSURLRequest).mutableCopy() as! NSMutableURLRequest
-        
-        // Set the HTTP method explicitly
-        mutableRequest.httpMethod = originalRequest.httpMethod!
 
-        // Set the body explicitly for POST/PUT
-        if let body = originalRequest.httpBody {
-            mutableRequest.httpBody = body
+        // Explicitly set HTTP method
+        if let method = originalRequest.httpMethod {
+            mutableRequest.httpMethod = method
         }
 
         // Copy headers
@@ -31,22 +29,28 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
             }
         }
 
-        // Use NSURLConnection to start the request
+        // Copy body for POST/PUT
+        if let body = originalRequest.httpBody {
+            mutableRequest.httpBody = body
+            mutableRequest.setValue("\(body.count)", forHTTPHeaderField: "Content-Length")
+        }
+
+        // Start connection
         connection = NSURLConnection(request: mutableRequest as URLRequest, delegate: self, startImmediately: true)
     }
-
-
 
     public override func cancel() {
         super.cancel()
         connection?.cancel()
     }
 
+    // MARK: - NSURLConnection Delegates
+
     public func connection(_ connection: NSURLConnection, didReceive response: URLResponse) {
+        // Keep reference
+        self.response = response
         if let delegate = session.delegate as? URLSessionDataDelegateCompat {
             delegate.urlSession(session, dataTask: self, didReceive: response) { _ in }
-            
-            
         }
     }
 
@@ -58,14 +62,25 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
     }
 
     public func connectionDidFinishLoading(_ connection: NSURLConnection) {
-        completionHandler(receivedData, connection.currentRequest.url.flatMap { URLResponse(url: $0, mimeType: nil, expectedContentLength: receivedData.count, textEncodingName: nil) }, nil)
+        // Convert to proper HTTPURLResponse
+        let httpResponse: HTTPURLResponse
+        if let resp = response as? HTTPURLResponse {
+            httpResponse = resp
+        } else if let url = connection.currentRequest.url {
+            httpResponse = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: connection.currentRequest.allHTTPHeaderFields) ?? HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        } else {
+            // Should never happen
+            completionHandler(receivedData, response, nil)
+            finishTask()
+            return
+        }
+
+        completionHandler(receivedData, httpResponse, nil)
         finishTask()
     }
 
-    // In URLSessionDataTaskCompat.swift
     public func connection(_ connection: NSURLConnection, didFailWithError error: Error) {
-        print("DEBUG: NSURLConnection failed with error:", error) // <-- MAKE SURE THIS LINE IS HERE
-        completionHandler(nil, connection.currentRequest.url.flatMap { URLResponse(url: $0, mimeType: nil, expectedContentLength: 0, textEncodingName: nil) }, error)
+        completionHandler(receivedData, response, error)
         finishTask(with: error)
     }
 }
