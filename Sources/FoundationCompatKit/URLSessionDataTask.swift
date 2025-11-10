@@ -67,13 +67,15 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
         if let resp = response as? HTTPURLResponse {
             httpResponse = resp
         } else if let url = connection.currentRequest.url {
-            httpResponse = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: connection.currentRequest.allHTTPHeaderFields) ?? HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            httpResponse = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: connection.currentRequest.allHTTPHeaderFields)
+                ?? HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
+                ?? HTTPURLResponse() // fallback to empty
         } else {
-            // Should never happen
             completionHandler(receivedData, response, nil)
             finishTask()
             return
         }
+
 
         completionHandler(receivedData, httpResponse, nil)
         finishTask()
