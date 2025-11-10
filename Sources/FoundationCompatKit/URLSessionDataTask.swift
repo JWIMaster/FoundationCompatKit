@@ -6,7 +6,6 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
     private var connection: NSURLConnection?
     private var receivedData = Data()
     private var response: URLResponse?
-    private var isFinished = false
 
     public init(session: URLSessionCompat, request: URLRequest, completionHandler: @escaping (Data?, URLResponse?, Error?) -> Void) {
         self.completionHandler = completionHandler
@@ -18,7 +17,7 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
 
         let mutableRequest = (originalRequest as NSURLRequest).mutableCopy() as! NSMutableURLRequest
 
-        // Set HTTP method
+        // Explicitly set HTTP method
         if let method = originalRequest.httpMethod {
             mutableRequest.httpMethod = method
         }
@@ -43,13 +42,12 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
     public override func cancel() {
         super.cancel()
         connection?.cancel()
-        connection = nil
-        safeComplete(data: receivedData, response: response, error: NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled, userInfo: nil))
     }
 
     // MARK: - NSURLConnection Delegates
 
     public func connection(_ connection: NSURLConnection, didReceive response: URLResponse) {
+        // Keep reference
         self.response = response
         if let delegate = session.delegate as? URLSessionDataDelegateCompat {
             delegate.urlSession(session, dataTask: self, didReceive: response) { _ in }
@@ -64,47 +62,27 @@ public class URLSessionDataTaskCompat: URLSessionTaskCompat, NSURLConnectionData
     }
 
     public func connectionDidFinishLoading(_ connection: NSURLConnection) {
-        // Ensure we have a valid HTTPURLResponse
+        // Convert to proper HTTPURLResponse
         let httpResponse: HTTPURLResponse
         if let resp = response as? HTTPURLResponse {
             httpResponse = resp
         } else if let url = connection.currentRequest.url {
-            let headers = connection.currentRequest.allHTTPHeaderFields ?? [:]
-            httpResponse = HTTPURLResponse(
-                url: url,
-                statusCode: 200,
-                httpVersion: "HTTP/1.1",
-                headerFields: headers
-            ) ?? HTTPURLResponse(
-                url: url,
-                statusCode: 200,
-                httpVersion: nil,
-                headerFields: [:]
-            )!
+            httpResponse = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: connection.currentRequest.allHTTPHeaderFields)
+                ?? HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
+                ?? HTTPURLResponse() // fallback to empty
         } else {
-            safeComplete(data: receivedData, response: response, error: nil)
+            completionHandler(receivedData, response, nil)
+            finishTask()
             return
         }
 
-        safeComplete(data: receivedData, response: httpResponse, error: nil)
-        connection.cancel()
-        self.connection = nil
+
+        completionHandler(receivedData, httpResponse, nil)
+        finishTask()
     }
 
     public func connection(_ connection: NSURLConnection, didFailWithError error: Error) {
-        safeComplete(data: receivedData, response: response, error: error)
-        connection.cancel()
-        self.connection = nil
-    }
-
-    // MARK: - Safe Completion
-
-    private func safeComplete(data: Data?, response: URLResponse?, error: Error?) {
-        guard !isFinished else { return }
-        isFinished = true
-        DispatchQueue.main.async { [weak self] in
-            self?.completionHandler(data, response, error)
-            self?.finishTask(with: error)
-        }
+        completionHandler(receivedData, response, error)
+        finishTask(with: error)
     }
 }
