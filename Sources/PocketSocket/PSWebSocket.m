@@ -334,8 +334,15 @@
     [_driver start];
     
     // schedule streams
-    CFReadStreamSetDispatchQueue((__bridge CFReadStreamRef)_inputStream, _workQueue);
-    CFWriteStreamSetDispatchQueue((__bridge CFWriteStreamRef)_outputStream, _workQueue);
+    // Objective-C example
+    _inputStream.delegate = self;
+    [_inputStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+    [_inputStream open];
+
+    _outputStream.delegate = self;
+    [_outputStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+    [_outputStream open];
+
 
     // open streams
     if(_inputStream.streamStatus == NSStreamStatusNotOpen) {
