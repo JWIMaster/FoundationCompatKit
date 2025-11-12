@@ -334,14 +334,9 @@
     [_driver start];
     
     // schedule streams
-    // Objective-C example
-    _inputStream.delegate = self;
+    // Instead of CFReadStreamSetDispatchQueue / CFWriteStreamSetDispatchQueue
     [_inputStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-    [_inputStream open];
-
-    _outputStream.delegate = self;
     [_outputStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-    [_outputStream open];
 
 
     // open streams
