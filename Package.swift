@@ -23,11 +23,16 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .target(
             name: "FoundationCompatKit",
-            dependencies: ["SocketRocket", "WSWebSocket"],
+            dependencies: ["SocketRocket", "WSWebSocket", "PocketSocket"],
             path: "Sources/FoundationCompatKit"),
         .target(
             name: "SocketRocket",
             path: "Sources/SocketRocket",
+            publicHeadersPath: "."
+        ),
+        .target(
+            name: "PocketSocket",
+            path: "Sources/PocketSocket",
             publicHeadersPath: "."
         ),
         .target(
