@@ -1,4 +1,4 @@
-//  Copyright 2014-Present Zwopple Limited
+//  Copyright 2014 Zwopple Limited
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@
     uint32_t maskOffset;
     NSMutableData *buffer;
     NSUInteger payloadRemainingLength;
-    BOOL pmd;
 }
 @end
 @implementation PSWebSocketFrame
@@ -62,6 +61,7 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
     
     NSString *_handshakeSecKey;
     
+    PSWebSocketFrame *_initialFrame;
     NSMutableArray *_frames;
     
     BOOL _pmdEnabled;
@@ -82,15 +82,10 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
 
 + (BOOL)isWebSocketRequest:(NSURLRequest *)request {
     NSDictionary *headers = request.allHTTPHeaderFields;
-    
-    NSOrderedSet *version = PSHTTPHeaderFieldValues([headers[@"Sec-WebSocket-Version"] lowercaseString]);
-    NSOrderedSet *upgrade = PSHTTPHeaderFieldValues([headers[@"Upgrade"] lowercaseString]);
-    NSOrderedSet *connection = PSHTTPHeaderFieldValues([headers[@"Connection"] lowercaseString]);
-    
     if(headers[@"Sec-WebSocket-Key"] &&
-       [version containsObject:@"13"] &&
-       [connection containsObject:@"upgrade"] &&
-       [upgrade containsObject:@"websocket"] &&
+       [headers[@"Sec-WebSocket-Version"] isEqualToString:@"13"] &&
+       [[headers[@"Connection"] lowercaseString] isEqualToString:@"upgrade"] &&
+       [[headers[@"Upgrade"] lowercaseString] isEqualToString:@"websocket"] &&
        [request.HTTPMethod.lowercaseString isEqualToString:@"get"] &&
        request.HTTPBody.length == 0) {
         return YES;
@@ -177,16 +172,17 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
     if(reason) {
         NSRange remainingRange = NSMakeRange(0, 0);
         NSUInteger usedLength = 0;
-        __unused BOOL success = [reason getBytes:dataBytes + sizeof(uint16_t)
-                                       maxLength:data.length - sizeof(uint16_t)
-                                      usedLength:&usedLength
-                                        encoding:NSUTF8StringEncoding
-                                         options:NSStringEncodingConversionExternalRepresentation
-                                           range:NSMakeRange(0, reason.length)
-                                  remainingRange:&remainingRange];
+        BOOL success = [reason getBytes:dataBytes + sizeof(uint16_t)
+                              maxLength:data.length - sizeof(uint16_t)
+                             usedLength:&usedLength
+                               encoding:NSUTF8StringEncoding
+                                options:NSStringEncodingConversionExternalRepresentation
+                                  range:NSMakeRange(0, reason.length)
+                         remainingRange:&remainingRange];
         NSAssert(success, @"Failed to write reason when sending close frame");
         NSAssert(remainingRange.length == 0, @"Failed to write reason when sending close frame");
         
+        success = YES;
         data.length = usedLength + sizeof(uint16_t);
     }
     [self writeMessageWithOpCode:PSWebSocketOpCodeClose data:data];
@@ -206,10 +202,8 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
     
     // set handshake sec key
     NSMutableData *secKeyData = [NSMutableData dataWithLength:16];
-    int result = SecRandomCopyBytes(kSecRandomDefault, secKeyData.length, secKeyData.mutableBytes);
-    if (result != 0) {
-        PSWebSocketLog(@"SecRandomCopyBytes failed with: %d", result);
-    }
+    SecRandomCopyBytes(kSecRandomDefault, secKeyData.length, secKeyData.mutableBytes);
+    
     _handshakeSecKey = [self base64EncodedData:secKeyData];
     
     NSURL *URL = _request.URL;
@@ -262,7 +256,7 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
     }
     
     // validate extensions
-    NSOrderedSet *extensionComponents = PSHTTPHeaderFieldValues([headers[@"Sec-WebSocket-Extensions"] lowercaseString]);
+    NSArray *extensionComponents = [headers[@"Sec-WebSocket-Extensions"] componentsSeparatedByString:@"; "];
     if(![self pmdConfigureWithExtensionsHeaderComponents:extensionComponents]) {
         [self failWithErrorCode:PSWebSocketErrorCodeHandshakeFailed reason:@"invalid permessage-deflate extension parameters"];
         return;
@@ -276,9 +270,6 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
     CFHTTPMessageSetHeaderFieldValue(msg, CFSTR("Connection"), CFSTR("Upgrade"));
     CFHTTPMessageSetHeaderFieldValue(msg, CFSTR("Upgrade"), CFSTR("websocket"));
     CFHTTPMessageSetHeaderFieldValue(msg, CFSTR("Sec-WebSocket-Accept"), (__bridge CFStringRef)[self acceptHeaderForKey:_handshakeSecKey]);
-    if (_protocol) {
-        CFHTTPMessageSetHeaderFieldValue(msg, CFSTR("Sec-WebSocket-Protocol"), (__bridge CFStringRef)_protocol);
-    }
     
     NSMutableArray *negotiatedExtensionComponents = [NSMutableArray array];
     [negotiatedExtensionComponents addObjectsFromArray:[self pmdExtensionsHeaderComponents]];
@@ -308,8 +299,8 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
     uint8_t *headerBytes = header.mutableBytes;
     
     headerBytes[0] |= PSWebSocketFinMask;
-    //  headerBytes[0] |= (PSWebSocketRsv2Mask);
-    //  headerBytes[0] |= (PSWebSocketRsv3Mask);
+    //  headerBytes[0] |= (ZWPWebSocketRsv2Mask);
+    //  headerBytes[0] |= (ZWPWebSocketRsv3Mask);
     headerBytes[0] |= (PSWebSocketOpCodeMask & opcode);
     
     // determine payload payload
@@ -324,7 +315,7 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
         }
         
         // create deflate buffer
-        NSMutableData *deflated = [NSMutableData dataWithCapacity:[payload length]/4];
+        NSMutableData *deflated = [NSMutableData dataWithCapacity:ceil([payload length]/4.0)];
         
         // error
         NSError *error = nil;
@@ -375,14 +366,10 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
     
     // set masking data
     if(_mode == PSWebSocketModeClient) {
-        headerBytes = header.mutableBytes; // because -appendBytes may have realloced header
         headerBytes[1] |= PSWebSocketMaskMask;
         
         uint8_t maskKey[4];
-        int result = SecRandomCopyBytes(kSecRandomDefault, sizeof(maskKey), maskKey);
-        if (result != 0) {
-            PSWebSocketLog(@"SecRandomCopyBytes failed with: %d", result);
-        }
+        SecRandomCopyBytes(kSecRandomDefault, sizeof(maskKey), maskKey);
         [header appendBytes:maskKey length:sizeof(maskKey)];
         
         // make copy if not already mutable
@@ -414,8 +401,22 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
             NSAssert(maxLength > 0, @"Must have 1 or more bytes");
             NSAssert(_state == PSWebSocketDriverStateHandshakeResponse, @"Invalid state for reading handshake response");
             
-            void* boundary = memmem(bytes, maxLength, "\r\n\r\n", 4);
-            if (boundary == NULL) {
+            uint8_t boundary[] = {'\r', '\n','\r', '\n'};
+            NSUInteger preBoundaryLength = 0;
+            NSUInteger matched = 0;
+            for(NSUInteger i = 0; i < maxLength; ++i) {
+                const uint8_t byte = ((const uint8_t *)bytes)[i];
+                const uint8_t boundaryByte = boundary[matched];
+                if(byte == boundaryByte) {
+                    if(++matched == sizeof(boundary)) {
+                        preBoundaryLength = i + 1;
+                        break;
+                    }
+                } else {
+                    matched = 0;
+                }
+            }
+            if(preBoundaryLength == 0) {
                 // do not allow too much data for headers
                 if(maxLength >= 16384) {
                     PSWebSocketSetOutError(outError, PSWebSocketErrorCodeHandshakeFailed, @"HTTP headers did not finish after reading 16384 bytes");
@@ -423,15 +424,11 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
                 }
                 return 0;
             }
-            NSUInteger preBoundaryLength = boundary + 4 - bytes;
             
             // create handshake
             CFHTTPMessageRef msg = CFHTTPMessageCreateEmpty(NULL, NO);
-            if (!CFHTTPMessageAppendBytes(msg, (const UInt8 *)bytes, preBoundaryLength)) {
-                PSWebSocketSetOutError(outError, PSWebSocketErrorCodeHandshakeFailed, @"Not a valid HTTP response");
-                CFRelease(msg);
-                return -1;
-            }
+            CFHTTPMessageAppendBytes(msg, (const UInt8 *)bytes, preBoundaryLength);
+            
             
             // validate complete
             if(!CFHTTPMessageIsHeaderComplete(msg)) {
@@ -443,27 +440,21 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
             // get values
             NSInteger statusCode = CFHTTPMessageGetResponseStatusCode(msg);
             NSDictionary *headers = [CFBridgingRelease(CFHTTPMessageCopyAllHeaderFields(msg)) copy];
-            CFAutorelease(msg);
+            CFRelease(msg);
             
             // validate status
             if(statusCode != 101) {
-                if(outError) {
-                    NSString* message = CFBridgingRelease(CFHTTPMessageCopyResponseStatusLine(msg));
-                    if (!message)
-                        message = [NSHTTPURLResponse localizedStringForStatusCode:statusCode];
-                    else if ([message hasPrefix:@"HTTP/1.1 "])
-                        message = [message substringFromIndex:9];
-                    NSString* desc = [@"Handshake failed: " stringByAppendingString:message];
-                    NSDictionary* userInfo = @{NSLocalizedDescriptionKey: desc,
-                                               NSLocalizedFailureReasonErrorKey: message,
-                                               PSHTTPStatusErrorKey: @(statusCode),
-                                               PSHTTPResponseErrorKey: (__bridge id)msg};
-                    *outError = [NSError errorWithDomain:PSWebSocketErrorDomain
-                                                    code:PSWebSocketErrorCodeHandshakeFailed
-                                                userInfo:userInfo];
-                }
+                PSWebSocketSetOutError(outError, PSWebSocketErrorCodeHandshakeFailed, @"Handshake failed");
                 return - 1;
             }
+            
+            // validate protocol
+            NSArray *protocolComponents = [_request.allHTTPHeaderFields[@"Sec-WebSocket-Protocol"] componentsSeparatedByString:@" "];
+            if(headers[@"Sec-WebSocket-Protocol"] && ![protocolComponents containsObject:headers[@"Sec-WebSocket-Protocol"]]) {
+                PSWebSocketSetOutError(outError, PSWebSocketErrorCodeHandshakeFailed, @"Invalid Sec-WebSocket-Protocol");
+                return -1;
+            }
+            _protocol = headers[@"Sec-WebSocket-Protocol"];
             
             // validate accept
             if(![headers[@"Sec-WebSocket-Accept"] isEqualToString:[self acceptHeaderForKey:_handshakeSecKey]]) {
@@ -477,20 +468,8 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
                 return -1;
             }
             
-            // validate protocol
-            _protocol = headers[@"Sec-WebSocket-Protocol"];
-            NSString* protocolRequest = _request.allHTTPHeaderFields[@"Sec-WebSocket-Protocol"];
-            if (protocolRequest) {
-                NSArray *protocolComponents = [protocolRequest componentsSeparatedByString:@" "];
-                if(!_protocol || ![protocolComponents containsObject:_protocol]) {
-                    PSWebSocketSetOutError(outError, PSWebSocketErrorCodeHandshakeFailed,
-                                           @"Invalid Sec-WebSocket-Protocol");
-                    return -1;
-                }
-            }
-
             // extensions
-            NSOrderedSet *extensionComponents = PSHTTPHeaderFieldValues([headers[@"Sec-WebSocket-Extensions"] lowercaseString]);
+            NSArray *extensionComponents = [headers[@"Sec-WebSocket-Extensions"] componentsSeparatedByString:@"; "];
             
             // per-message deflate
             if(![self pmdConfigureWithExtensionsHeaderComponents:extensionComponents]) {
@@ -605,13 +584,11 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
             frame->payloadRemainingLength = (NSUInteger)payloadLength;
             frame->headerExtraLength = headerExtraLength;
             frame->control = control;
-            frame->pmd = (_pmdEnabled && !control && rsv1);
             
             if(!frame->control && _frames.count > 0) {
-                PSWebSocketFrame *lastFrame = [_frames lastObject];
-                frame->pmd = (_pmdEnabled && (rsv1 || lastFrame->pmd));
-                frame->opcode = lastFrame->opcode;
-                frame->buffer = lastFrame->buffer;
+                _initialFrame = [_frames lastObject];
+                frame->opcode = _initialFrame->opcode;
+                frame->buffer = _initialFrame->buffer;
             } else {
                 frame->buffer = [NSMutableData data];
             }
@@ -689,7 +666,7 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
             }
             
             // inflate if necessary
-            if(frame->pmd) {
+            if(_pmdEnabled && !frame->control && (frame->rsv1 || _initialFrame->rsv1)) {
                 // reset inflater if we need to
                 if((_pmdClientNoContextTakeover && _mode == PSWebSocketModeServer) ||
                    (_pmdServerNoContextTakeover && _mode == PSWebSocketModeClient)) {
@@ -767,18 +744,12 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
         return YES;
     }
     
-    // close off pmd for zero-length frames that have a buffer otherwise they are orphaned
-    if (frame->pmd && frame->payloadLength == 0 && frame->buffer.length > 0) {
-        if (![_inflater end:outError]) {
-            return -1;
-        }
-    }
-    
     // remove frames
     if(frame->control) {
         [_frames removeLastObject];
     } else {
         [_frames removeAllObjects];
+        _initialFrame = nil;
         _utf8DecoderState = 0;
         _utf8DecoderCodePoint = 0;
     }
@@ -839,29 +810,10 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
 
 #pragma mark - Erroring
 
-+ (NSError*)errorWithCode:(NSInteger)code reason:(NSString *)reason {
-    if (reason == nil) {
-        static NSString* const kStatusNames[] = {
-            @"Normal",
-            @"Going Away",
-            @"Protocol Error",
-            @"Unhandled Type",
-            nil,// 1004 reserved
-            @"No Status Received",
-            nil,// 1006 reserved
-            @"Invalid UTF-8",
-            @"Policy Violated",
-            @"Message Too Big"
-        };
-        if (code >= PSWebSocketStatusCodeNormal && code <= PSWebSocketStatusCodeMessageTooBig) {
-            reason = kStatusNames[code - PSWebSocketStatusCodeNormal];
-        }
-    }
-    NSDictionary *userInfo = reason ? @{NSLocalizedDescriptionKey: reason} : nil;
-    return [NSError errorWithDomain:PSWebSocketErrorDomain code:code userInfo:userInfo];
-}
 - (void)failWithErrorCode:(NSInteger)code reason:(NSString *)reason {
-    [self failWithError: [[self class] errorWithCode:code reason:reason]];
+    NSDictionary *userInfo = @{NSLocalizedDescriptionKey: reason};
+    NSError *error = [NSError errorWithDomain:PSWebSocketErrorDomain code:code userInfo:userInfo];
+    [self failWithError:error];
 }
 - (void)failWithError:(NSError *)error {
     NSParameterAssert(error);
@@ -892,26 +844,26 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
     }
     return @[];
 }
-- (BOOL)pmdConfigureWithExtensionsHeaderComponents:(NSOrderedSet *)components {
+- (BOOL)pmdConfigureWithExtensionsHeaderComponents:(NSArray *)components {
     _pmdEnabled = NO;
-    _pmdClientWindowBits = -15;
+    _pmdClientWindowBits = -11;
     _pmdClientNoContextTakeover = NO;
-    _pmdServerWindowBits = -15;
+    _pmdServerWindowBits = -11;
     _pmdServerNoContextTakeover = NO;
     
     for(NSString *component in components) {
         // split to key & value
         NSArray *subcomponents = [component componentsSeparatedByString:@"="];
         
-        if([subcomponents[0] isEqualToString:@"permessage-deflate"]) {
+        if([component isEqualToString:@"permessage-deflate"]) {
             _pmdEnabled = YES;
-        } else if([subcomponents[0] isEqualToString:@"client_max_window_bits"] && subcomponents.count > 1) {
-            _pmdClientWindowBits = -[subcomponents[1] integerValue];
-        } else if([subcomponents[0] isEqualToString:@"server_max_window_bits"] && subcomponents.count > 1) {
-            _pmdServerWindowBits = -[subcomponents[1] integerValue];
-        } else if([subcomponents[0] isEqualToString:@"client_no_context_takeover"] && _mode == PSWebSocketModeClient) {
+        } else if([component isEqualToString:@"client_max_window_bits"] && subcomponents.count > 1) {
+            _pmdClientWindowBits = -[subcomponents[0] integerValue];
+        } else if([component isEqualToString:@"server_max_window_bits"] && subcomponents.count > 1) {
+            _pmdServerWindowBits = -[subcomponents[0] integerValue];
+        } else if([component isEqualToString:@"client_no_context_takeover"] && _mode == PSWebSocketModeClient) {
             _pmdClientNoContextTakeover = YES;
-        } else if([subcomponents[0] isEqualToString:@"server_no_context_takeover"] && _mode == PSWebSocketModeClient) {
+        } else if([component isEqualToString:@"server_no_context_takeover"] && _mode == PSWebSocketModeClient) {
             _pmdServerNoContextTakeover = YES;
         }
     }
@@ -923,14 +875,12 @@ typedef NS_ENUM(NSInteger, PSWebSocketDriverState) {
         return NO;
     }
     
-    if (_pmdEnabled) {
-        if(_mode == PSWebSocketModeClient) {
-            _inflater = [[PSWebSocketInflater alloc] initWithWindowBits:_pmdServerWindowBits];
-            _deflater = [[PSWebSocketDeflater alloc] initWithWindowBits:_pmdClientWindowBits memoryLevel:8];
-        } else {
-            _inflater = [[PSWebSocketInflater alloc] initWithWindowBits:_pmdClientWindowBits];
-            _deflater = [[PSWebSocketDeflater alloc] initWithWindowBits:_pmdServerWindowBits memoryLevel:8];
-        }
+    if(_mode == PSWebSocketModeClient) {
+        _inflater = [[PSWebSocketInflater alloc] initWithWindowBits:_pmdClientWindowBits];
+        _deflater = [[PSWebSocketDeflater alloc] initWithWindowBits:_pmdServerWindowBits memoryLevel:8];
+    } else {
+        _inflater = [[PSWebSocketInflater alloc] initWithWindowBits:_pmdServerWindowBits];
+        _deflater = [[PSWebSocketDeflater alloc] initWithWindowBits:_pmdClientWindowBits memoryLevel:8];
     }
     
     return YES;
