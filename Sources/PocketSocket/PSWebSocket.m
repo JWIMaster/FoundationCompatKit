@@ -310,57 +310,63 @@
 #pragma mark - Connection
 
 - (void)connect {
-    if(_secure && _mode == PSWebSocketModeClient) {
-        
+    if (_secure && _mode == PSWebSocketModeClient) {
         __block BOOL customTrustEvaluation = NO;
         [self executeDelegateAndWait:^{
             customTrustEvaluation = [_delegate respondsToSelector:@selector(webSocket:evaluateServerTrust:)];
         }];
-        
+
         NSMutableDictionary *ssl = [NSMutableDictionary dictionary];
         ssl[(__bridge id)kCFStreamSSLLevel] = (__bridge id)kCFStreamSocketSecurityLevelNegotiatedSSL;
         ssl[(__bridge id)kCFStreamSSLValidatesCertificateChain] = @(!customTrustEvaluation);
         ssl[(__bridge id)kCFStreamSSLIsServer] = @NO;
-        
+
         _negotiatedSSL = !customTrustEvaluation;
         [_inputStream setProperty:ssl forKey:(__bridge id)kCFStreamPropertySSLSettings];
     }
 
-    // delegate
+    // set delegates
     _inputStream.delegate = self;
     _outputStream.delegate = self;
-    
-    // driver
+
+    // start driver
     [_driver start];
-    
-    // schedule streams
-    // Instead of CFReadStreamSetDispatchQueue / CFWriteStreamSetDispatchQueue
-    [_inputStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-    [_outputStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
 
+    // **iOS 6 run loop scheduling**
+    // Use a background thread for your `_workQueue` style behaviour
+    dispatch_async(_workQueue, ^{
+        NSRunLoop *runLoop = [NSRunLoop currentRunLoop];
 
-    // open streams
-    if(_inputStream.streamStatus == NSStreamStatusNotOpen) {
-        [_inputStream open];
-    }
-    if(_outputStream.streamStatus == NSStreamStatusNotOpen) {
-        [_outputStream open];
-    }
-    
-    [[NSRunLoop currentRunLoop] run];
-    
+        [_inputStream scheduleInRunLoop:runLoop forMode:NSDefaultRunLoopMode];
+        [_outputStream scheduleInRunLoop:runLoop forMode:NSDefaultRunLoopMode];
+
+        // open streams
+        if (_inputStream.streamStatus == NSStreamStatusNotOpen) {
+            [_inputStream open];
+        }
+        if (_outputStream.streamStatus == NSStreamStatusNotOpen) {
+            [_outputStream open];
+        }
+
+        // run the loop in the background
+        while (_readyState == PSWebSocketReadyStateConnecting ||
+               _readyState == PSWebSocketReadyStateOpen) {
+            [runLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+        }
+    });
+
     // pump
     [self pumpInput];
     [self pumpOutput];
-    
+
     // prepare timeout
-    if(_request.timeoutInterval > 0.0) {
-        __weak typeof(self)weakSelf = self;
+    if (_request.timeoutInterval > 0.0) {
+        __weak typeof(self) weakSelf = self;
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(_request.timeoutInterval * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            __strong typeof(weakSelf)strongSelf = weakSelf;
-            if(strongSelf) {
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (strongSelf) {
                 [strongSelf executeWork:^{
-                    if(strongSelf->_readyState == PSWebSocketReadyStateConnecting) {
+                    if (strongSelf->_readyState == PSWebSocketReadyStateConnecting) {
                         [strongSelf failWithCode:PSWebSocketErrorCodeTimedOut reason:@"Timed out."];
                     }
                 }];
@@ -368,6 +374,7 @@
         });
     }
 }
+
 - (void)disconnectGracefully {
     _closeWhenFinishedOutput = YES;
     [self pumpOutput];
