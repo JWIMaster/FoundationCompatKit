@@ -347,6 +347,8 @@
         [_outputStream open];
     }
     
+    [[NSRunLoop currentRunLoop] run];
+    
     // pump
     [self pumpInput];
     [self pumpOutput];
