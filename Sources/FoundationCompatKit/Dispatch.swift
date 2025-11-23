@@ -40,6 +40,7 @@ public struct LegacyQoS {
 public extension DispatchQueue {
     ///Modern style QoS wrapper for the old Swift overlay
     @available(iOS, introduced: 6.0, obsoleted: 8.0)
+    @_disfavoredOverload
     class func global(qos: LegacyQoS.QoS) -> DispatchQueue {
         return DispatchQueue.global(priority: LegacyQoS(qos).legacyPriority)
     }
@@ -74,6 +75,7 @@ public class DispatchWorkItem {
 
 public extension DispatchQueue {
     @available(iOS, introduced: 6.0, deprecated: 8.0)
+    @_disfavoredOverload
     func async(execute workItem: DispatchWorkItem) {
         self.async {
             workItem.perform()
@@ -81,6 +83,7 @@ public extension DispatchQueue {
     }
 
     @available(iOS, introduced: 6.0, deprecated: 8.0)
+    @_disfavoredOverload
     func asyncAfter(deadline: DispatchTime, execute workItem: DispatchWorkItem) {
         let deltaNano = max(deadline.uptimeNanoseconds - DispatchTime.now().uptimeNanoseconds, 0)
         let deltaSeconds = Double(deltaNano) / 1_000_000_000
