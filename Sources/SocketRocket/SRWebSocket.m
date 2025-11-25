@@ -26,7 +26,9 @@
 #endif
 
 #if TARGET_OS_IPHONE
+#if !(TARGET_OS_MACCATALYST)
 #import <Endian.h>
+#endif
 #else
 #import <CoreServices/CoreServices.h>
 #endif

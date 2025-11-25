@@ -4,6 +4,7 @@ public extension Calendar {
     
     /// Shim for `isDateInToday(_:)` that works on iOS 6+
     @available(iOS, introduced: 6.0, obsoleted: 8.0)
+    @_disfavoredOverload
     func isDateInToday(_ date: Date) -> Bool {
         let components = self.dateComponents([.year, .month, .day], from: date)
         let todayComponents = self.dateComponents([.year, .month, .day], from: Date())
@@ -14,6 +15,7 @@ public extension Calendar {
     
     // Optional: add similar shims for yesterday/tomorrow
     @available(iOS, introduced: 6.0, obsoleted: 8.0)
+    @_disfavoredOverload
     func isDateInYesterday(_ date: Date) -> Bool {
         let components = self.dateComponents([.year, .month, .day], from: date)
         let yesterdayComponents = self.dateComponents([.year, .month, .day], from: Date().addingTimeInterval(-86400))
@@ -22,7 +24,8 @@ public extension Calendar {
         components.day == yesterdayComponents.day
     }
     
-    @available(iOS, introduced: 6.0, obsoleted: 8.0)
+    @available(iOS, introduced: 6.0, obsoleted: 8.0)\
+    @_disfavoredOverload
     func isDateInTomorrow(_ date: Date) -> Bool {
         let components = self.dateComponents([.year, .month, .day], from: date)
         let tomorrowComponents = self.dateComponents([.year, .month, .day], from: Date().addingTimeInterval(86400))
