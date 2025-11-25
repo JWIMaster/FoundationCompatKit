@@ -24,7 +24,7 @@ public extension Calendar {
         components.day == yesterdayComponents.day
     }
     
-    @available(iOS, introduced: 6.0, obsoleted: 8.0)\
+    @available(iOS, introduced: 6.0, obsoleted: 8.0)
     @_disfavoredOverload
     func isDateInTomorrow(_ date: Date) -> Bool {
         let components = self.dateComponents([.year, .month, .day], from: date)
