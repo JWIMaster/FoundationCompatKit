@@ -19,6 +19,8 @@ public class URLSessionTaskCompat: NSObject {
         guard state != .running else { return }
         state = .running
         startTask()
+        let a: String = ""
+        
     }
 
     public func suspend() {
